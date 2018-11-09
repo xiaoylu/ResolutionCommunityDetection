@@ -113,7 +113,6 @@ def pvalue(G,comm,twicell,gamma,indent):
   plt.text(0.8, 0.8, r"-2LL=%.1f" % twicell,fontsize=35)
   plt.savefig("pvalue%d.png" % indent)
   print "savefig pvalue%d.png" % indent
-  if (indent == 4): exit(1) 
   return 1.*sum([_>twicell for _ in null_distri])/L
 
 #pll_test()
