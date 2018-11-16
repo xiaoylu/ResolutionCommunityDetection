@@ -25,10 +25,7 @@ from networkx.algorithms.community.quality import modularity
 from networkx.algorithms.community.modularity_max import * 
 
 from sklearn import metrics
-
-import matplotlib
-matplotlib.use("Agg")
-from matplotlib import pyplot as plt
+from heatmap import draw, heatmap, hist
 
 
 def loadG(path):
@@ -47,18 +44,6 @@ def loadGNC(path):
     for i, line in enumerate(fconf):
       gnc[i] = int(line.strip())
   return gnc
-
-def draw(G, colormap):
-  plt.clf()
-  pos=nx.spring_layout(G)
-  nx.draw_networkx_nodes(G,pos,node_size=[30*G.degree(k) for k,v in pos.items()],node_shape='o',node_color=list(map(colormap.get, G.nodes())))
-  labels=nx.draw_networkx_labels(G,\
-      pos={k:v+np.array([0.05,0.05]) for k,v in pos.items()},\
-      labels={k:"%d"%k for k,v in pos.items()}, font_size=14)
-  nx.draw_networkx_edges(G,pos,width=1,edge_color='black')
-  plt.axis('off')
-  plt.savefig("network.png", bbox_inches="tight")
-  print("Save figure to", "network.png") 
 
 def mle_paras(G, comm): 
   ''' 
@@ -89,7 +74,7 @@ def mle_paras(G, comm):
 
   return win, wout
 
-def _2ll(G, comm, modularity, win, wout):
+def _2ll(G, comms):
   '''
   Log-likelihood ratio test (LR Test).
   H0 is the configuration model.
@@ -97,24 +82,72 @@ def _2ll(G, comm, modularity, win, wout):
 
   Args:
       G: input networkx graph instance
-      comm: a dict where comm[i] is the community label of node i   
-      modularity: modularity of the graph G under partition comm
-      win, wout: the mixing parameters of PPM
+      comms: partition of network, list of lists 
 
   Returns:
       the log-likelihood ratio test statistic 
   '''
 
   # community sizes
-  ni = Counter(comm.values())
   E = G.number_of_edges()
 
+  # win, wout: the MLE mixing parameters of PPM
+  map_comm = {v:i for i, c in enumerate(comms) for v in c}
+  win, wout = mle_paras(G, map_comm) # the MLE win and wout
+  gamma = (win - wout) / (np.log(win) - np.log(wout)) # the MLE gamme
+
+  # modularity: modularity of the graph G under partition comm
+  mod = modularity(G, comms, gamma)
+
+  # constansts
   B = E * (np.log(win) - np.log(wout)) 
   C = E * (np.log(wout) - wout)
 
-  return 2. * (B * modularity + C + E)
+  return 2. * (B * mod + C + E)
 
-def multiscale_community_detection(G, depth = 1):
+def pvalue(G, comms, LLRtest, L = 3000):
+  '''
+  Compute the distribution of the test statistic in a range 
+
+  Args:
+      G: input networkx graph instance
+      comms: the suggested partiton, list of lists
+      LLRtest: the log-likelihood ratio test statistics 
+      L: number of synthetic null networks (default 3000)
+
+  Returns:
+      (float): pvalue of LLRtest
+  '''
+
+  if LLRtest > 10: # skip the obvious cases
+    return 0
+
+  node_seq, deg_seq = zip(*list(G.degree()))
+  index = {n:i for i, n in enumerate(node_seq)}
+  
+  # nodes should be index-0 
+  comms = [list(map(index.get, c)) for c in comms]
+  
+  null_distri = []
+  for niter in range(L):
+    # debug
+    if niter % 1000 == 1: print("iter", niter)
+
+    # generate configuration network
+    F = nx.Graph(nx.configuration_model(deg_seq))
+
+    # obtain test statistic on null network
+    LRnull = _2ll(F, comms)
+    null_distri.append( LRnull )
+
+  pval = sum([LLRnull > LLRtest for LLRnull in null_distri]) / float(len(null_distri))
+
+  # plot
+  hist(null_distri, LLRtest, "%d_%d" % (len(comms), G.number_of_nodes()), pval) 
+
+  return pval 
+
+def multiscale_community_detection(G, depth = 1, gamma = 0.8):
   '''
   Multi-scale community detection. Stop when hypothesis testing fails.
   Otherwise keep splitting a community into sub-communities.
@@ -125,24 +158,21 @@ def multiscale_community_detection(G, depth = 1):
   Returns:
       list: the final partition of the network
   '''
-  print("\t" * depth, G.nodes())
+  print("\t" * depth, int(G.number_of_nodes()), G.nodes())
 
-  comms = greedy_modularity_communities(G, gamma = 0.8)
+  comms = greedy_modularity_communities(G, gamma)
 
   if len(comms) == 1:
     print("\t" * depth, "*")
     return [list(G.nodes())]
 
-  map_comm = {v:i for i, c in enumerate(comms) for v in c}
-  win, wout = mle_paras(G, map_comm)
-  gamma = (win - wout) / (np.log(win) - np.log(wout))
+  LR_test = _2ll(G, comms)
 
-  mod = modularity(G, comms, gamma)
+  pval = pvalue(G, comms, LR_test)
 
-  LR_test = _2ll(G, map_comm, mod, win, wout)
-  print("\t" * depth, LR_test)
+  print("\t" * depth, "LR=", LR_test, "Pval=", pval)
 
-  if LR_test < 3.0: # stop
+  if LR_test < 5.0: # stop
     print("\t" * depth, "*")
     return [list(G.nodes())]
 
@@ -150,52 +180,74 @@ def multiscale_community_detection(G, depth = 1):
       multiscale_community_detection(G.subgraph(c), depth + 1) \
       for c in comms)  
 
-def tests(network = 'football'):
-  if network == 'football':
-    path = "../data/football/football.txt"
-    gnc_path = "../data/football/footballTSEinputConference.clu"
-    output_path = "../data/football/"
-    name = 'American College Football Network'
-
-  elif network == 'lesmis':
-    name = 'Les Miserable'
-    path = "../data/lesmis/lesmis.txt"
+def football():
+  path = "../data/football/football.txt"
+  gnc_path = "../data/football/footballTSEinputConference.clu"
+  name = 'American College Football Network'
 
   # load network and ground-truth communities
   G = loadG(path)
   G.graph['name'] = name 
-  #gnc = loadGNC(gnc_path)
+  gnc = loadGNC(gnc_path)
   print(nx.info(G))
 
+  # community detection
   comms = list(multiscale_community_detection(G))
-  map_comm = {v:i for i, c in enumerate(comms) for v in c}
 
   # check NMI
-  #a = [map_comm[k] for k in G.nodes()]
-  #b = [gnc[k] for k in G.nodes()]
-  #print("NMI=", metrics.adjusted_mutual_info_score(a, b))
+  map_comm = {v:i for i, c in enumerate(comms) for v in c}
+  a = [map_comm[k] for k in G.nodes()]
+  b = [gnc[k] for k in G.nodes()]
+  print("NMI=", metrics.adjusted_mutual_info_score(a, b))
 
   print("#Comm=", len(comms))
   print(comms)
-  draw(G, map_comm)
+
+  # draw topology
+  #draw(G, map_comm)
+
+  # draw heatmap
+  heatmap(G, comms)
 
 
-#def synthetic():
-#  for n in range(10, 80, 10):
-#      sizes = [50] * n 
-#      probs = np.ones((n, n)) * 0.05
-#      for i in range(n):
-#          probs[i][i] = 0.3
-#      G = nx.stochastic_block_model(sizes, probs, seed=0)
-#      
-#      start_time = time.time()
-#      for c in greedy_modularity_communities(G, gamma = 0.2):
-#          #print(c)
-#          pass
-#      print(G.number_of_nodes(), '\t', G.number_of_edges(), '\t', time.time() - start_time)
- 
+#def lesmis():
+#  name = 'Les Miserable'
+#  path = "../data/lesmis/lesmis.txt"
+
+def synthetic():
+  # n communities of size m
+  n, m = 20, 20
+  sizes = [m] * n
+
+  # mixing matrix
+  probs = np.ones((n, n)) * 0.05
+  for i in range(n):
+      probs[i][i] = 0.8 
+  #probs[:20][:20] += 0.1
+
+  G = nx.stochastic_block_model(sizes, probs, seed=0)
+  G.graph['name'] = 'synthetic'
+  print(nx.info(G))
+
+  # community detection
+  comms = list(multiscale_community_detection(G, gamma = 0.3))
+  map_comm = {v:i for i, c in enumerate(comms) for v in c}
+
+  # check NMI
+  a = [map_comm[k] for k in G.nodes()]
+  b = [k//m for k in G.nodes()]
+  print("NMI=", metrics.adjusted_mutual_info_score(a, b))
+
+  print("#Comm=", len(comms))
+  print(comms)
+
+  comms = greedy_modularity_communities(G)
+  print("#Comm=", len(comms))
+  print(comms)
+
 
 #===============================================================================
 if __name__ == "__main__":
-  tests(network = 'football')
-  #tests(network = 'lesmis')
+  football()
+
+  #synthetic()
