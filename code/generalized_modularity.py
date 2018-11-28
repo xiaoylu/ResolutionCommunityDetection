@@ -119,8 +119,11 @@ def pvalue(G, comms, LLRtest, L = 3000):
       (float): pvalue of LLRtest
   '''
 
-  if LLRtest > 10: # skip the obvious cases
+  if LLRtest > 50: # skip the obvious cases
     return 0
+  # WARN: fast check (skip p-value part)
+  else:
+    return 1
 
   node_seq, deg_seq = zip(*list(G.degree()))
   index = {n:i for i, n in enumerate(node_seq)}
@@ -131,7 +134,7 @@ def pvalue(G, comms, LLRtest, L = 3000):
   null_distri = []
   for niter in range(L):
     # debug
-    if niter % 1000 == 1: print("iter", niter)
+    if niter % 100 == 1: print("iter", niter)
 
     # generate configuration network
     F = nx.Graph(nx.configuration_model(deg_seq))
@@ -143,6 +146,7 @@ def pvalue(G, comms, LLRtest, L = 3000):
   pval = sum([LLRnull > LLRtest for LLRnull in null_distri]) / float(len(null_distri))
 
   # plot
+  print("plotting")
   hist(null_distri, LLRtest, "%d_%d" % (len(comms), G.number_of_nodes()), pval) 
 
   return pval 
@@ -229,6 +233,24 @@ def synthetic():
   G.graph['name'] = 'synthetic'
   print(nx.info(G))
 
+  ############## what if the graph is large ##################
+  # the experiment shows that Wilk's theorem is true?!
+  # in that way, n->+inf, the distribution is indeed chi-squared
+  #comms = [list(range(i * m, i * m + m)) for i in range(n)]
+  import random
+  X = list(range(n * m))
+  random.shuffle(X)
+  tmp = {i:x for i, x in enumerate(X)}
+  indices = [list(range(i * m, i * m + m)) for i in range(n)]
+  comms = [list(map(tmp.get, row)) for row in indices]
+
+  LR_test = _2ll(G, comms)
+  print(LR_test)
+  exit(1)
+  pvalue(G, comms, LR_test, L = 3000)
+  exit(1)
+  ############# end of this experiment #######################
+
   # community detection
   comms = list(multiscale_community_detection(G, gamma = 0.3))
   map_comm = {v:i for i, c in enumerate(comms) for v in c}
@@ -248,6 +270,6 @@ def synthetic():
 
 #===============================================================================
 if __name__ == "__main__":
-  football()
+  #football()
 
-  #synthetic()
+  synthetic()

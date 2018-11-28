@@ -95,7 +95,7 @@ def hist(null_distri, LRtest, figname, pvalue):
   try:
     plt.hist(null_distri, bins=50, density=True, facecolor='green', alpha=0.3)
   except:
-    print("unknow error. pass")
+    print("unknow error in hist plot. pass")
     return
 
   rv = scipy.stats.chi2(1) # only one extra dimension of freedom
