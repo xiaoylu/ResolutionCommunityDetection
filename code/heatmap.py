@@ -127,3 +127,14 @@ def hist(null_distri, LRtest, figname, pvalue):
   plt.savefig(name)
   print("Savefig", name)
 
+def hist(sizes_distri):
+  plt.clf()
+  marker = ['ko-.', 'b*-', 'rx-']
+  for i, (label, a) in enumerate(sizes_distri.items()):
+    hist, bin_edges = np.histogram(a)
+    plt.plot(bin_edges[:-1], hist, marker[i], label=label, linewidth = 2, markersize = 10)
+  plt.tick_params(axis='both', which='major', labelsize=30)
+  plt.legend(loc = "upper right", fontsize = 20)
+  plt.tight_layout()
+  plt.savefig("hist_sizes.png")
+  print("Save figure named \"hist_sizes.png\"")

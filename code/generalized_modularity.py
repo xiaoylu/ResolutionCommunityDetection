@@ -27,6 +27,10 @@ from networkx.algorithms.community.modularity_max import *
 from sklearn import metrics
 from heatmap import draw, heatmap, hist
 
+# treat warnings as error so can use try... except
+import warnings
+warnings.filterwarnings("error")
+
 
 def loadG(path):
   G = nx.Graph()
@@ -47,7 +51,7 @@ def loadGNC(path):
 
 def mle_paras(G, comm): 
   ''' 
-  Degree-corrected planted partition model (PPM) posterior estimation 
+  posterior MLE of the degree-corrected planted partition model (PPM)
   
   Args:
       G: input networkx graph instance
@@ -76,7 +80,7 @@ def mle_paras(G, comm):
 
 def _2ll(G, comms):
   '''
-  Log-likelihood ratio test (LR Test).
+  Log-likelihood ratio test (LR Test) normalized by the number of edges.
   H0 is the configuration model.
   H1 is the degree-corrected planted partition model.
 
@@ -92,9 +96,13 @@ def _2ll(G, comms):
   E = G.number_of_edges()
 
   # win, wout: the MLE mixing parameters of PPM
-  map_comm = {v:i for i, c in enumerate(comms) for v in c}
-  win, wout = mle_paras(G, map_comm) # the MLE win and wout
-  gamma = (win - wout) / (np.log(win) - np.log(wout)) # the MLE gamme
+  try:
+    map_comm = {v:i for i, c in enumerate(comms) for v in c}
+    win, wout = mle_paras(G, map_comm) # the MLE win and wout
+    gamma = (win - wout) / (np.log(win) - np.log(wout)) # the MLE gamme
+  except RuntimeWarning: 
+    #print("RuntimeWarning", list(G.edges()), comms, win, wout)
+    return 0.
 
   # modularity: modularity of the graph G under partition comm
   mod = modularity(G, comms, gamma)
@@ -103,9 +111,9 @@ def _2ll(G, comms):
   B = E * (np.log(win) - np.log(wout)) 
   C = E * (np.log(wout) - wout)
 
-  return 2. * (B * mod + C + E)
+  return 2. * (B * mod + C + E) / E # normalized by the number of edges ???
 
-def pvalue(G, comms, LLRtest, L = 3000):
+def pvalue(G, comms, LLRtest, L = 3000, plothist = False):
   '''
   Compute the distribution of the test statistic in a range 
 
@@ -119,11 +127,11 @@ def pvalue(G, comms, LLRtest, L = 3000):
       (float): pvalue of LLRtest
   '''
 
-  if LLRtest > 50: # skip the obvious cases
-    return 0
-  # WARN: fast check (skip p-value part)
-  else:
-    return 1
+  #if LLRtest > 50: # skip the obvious cases
+  #  return 0
+  ## WARN: fast check (skip p-value part)
+  #else:
+  #  return 1
 
   node_seq, deg_seq = zip(*list(G.degree()))
   index = {n:i for i, n in enumerate(node_seq)}
@@ -134,7 +142,7 @@ def pvalue(G, comms, LLRtest, L = 3000):
   null_distri = []
   for niter in range(L):
     # debug
-    if niter % 100 == 1: print("iter", niter)
+    if niter % 100 == 1: print("iter", niter, "H0 LLR", LRnull)
 
     # generate configuration network
     F = nx.Graph(nx.configuration_model(deg_seq))
@@ -146,43 +154,45 @@ def pvalue(G, comms, LLRtest, L = 3000):
   pval = sum([LLRnull > LLRtest for LLRnull in null_distri]) / float(len(null_distri))
 
   # plot
-  print("plotting")
-  hist(null_distri, LLRtest, "%d_%d" % (len(comms), G.number_of_nodes()), pval) 
+  if plothist:
+    print("plotting")
+    hist(null_distri, LLRtest, "%d_%d" % (len(comms), G.number_of_nodes()), pval) 
 
   return pval 
 
-def multiscale_community_detection(G, depth = 1, gamma = 0.8):
+def multiscale_community_detection(G, depth = 1, resolution = 0.5, threshold = 1.2, verbose = False):
   '''
   Multi-scale community detection. Stop when hypothesis testing fails.
   Otherwise keep splitting a community into sub-communities.
 
   Args:
       G: input networkx graph instance
+      depth: the current depth of the recursion
+      resolution: the resolution parameter, desired value is smaller than 1
+      threshold: terminate the recursion when the log-likelihood ratio (LLR) becomes smaller than threshold
 
   Returns:
       list: the final partition of the network
   '''
-  print("\t" * depth, int(G.number_of_nodes()), G.nodes())
+  verbose and print("\t" * depth, "D%d," % depth, "%d nodes" % int(G.number_of_nodes()))
 
-  comms = greedy_modularity_communities(G, gamma)
+  comms = greedy_modularity_communities(G, resolution)
 
   if len(comms) == 1:
-    print("\t" * depth, "*")
+    verbose and print("\t" * depth, "==")
     return [list(G.nodes())]
 
   LR_test = _2ll(G, comms)
 
-  pval = pvalue(G, comms, LR_test)
+  verbose and print("\t" * depth, "LR=", LR_test)
 
-  print("\t" * depth, "LR=", LR_test, "Pval=", pval)
-
-  if LR_test < 5.0: # stop
-    print("\t" * depth, "*")
+  if LR_test < threshold: # stop
+    verbose and print("\t" * depth, "**")
     return [list(G.nodes())]
 
   return itertools.chain.from_iterable( \
-      multiscale_community_detection(G.subgraph(c), depth + 1) \
-      for c in comms)  
+      multiscale_community_detection(G.subgraph(c), depth + 1, resolution, threshold) \
+      for c in comms)
 
 def football():
   path = "../data/football/football.txt"
@@ -218,9 +228,8 @@ def football():
 #  name = 'Les Miserable'
 #  path = "../data/lesmis/lesmis.txt"
 
-def synthetic():
+def synthetic(n = 20, m = 20):
   # n communities of size m
-  n, m = 20, 20
   sizes = [m] * n
 
   # mixing matrix
@@ -236,19 +245,25 @@ def synthetic():
   ############## what if the graph is large ##################
   # the experiment shows that Wilk's theorem is true?!
   # in that way, n->+inf, the distribution is indeed chi-squared
-  #comms = [list(range(i * m, i * m + m)) for i in range(n)]
+  gnc = [list(range(i * m, i * m + m)) for i in range(n)]
+
   import random
   X = list(range(n * m))
   random.shuffle(X)
   tmp = {i:x for i, x in enumerate(X)}
   indices = [list(range(i * m, i * m + m)) for i in range(n)]
-  comms = [list(map(tmp.get, row)) for row in indices]
+  # a completly random partition
+  rand_comms = [list(map(tmp.get, row)) for row in indices]
+  print("\n".join(map(str, rand_comms)))
 
-  LR_test = _2ll(G, comms)
-  print(LR_test)
-  exit(1)
-  pvalue(G, comms, LR_test, L = 3000)
-  exit(1)
+  LR_test = _2ll(G, rand_comms)
+  print("random communities", LR_test)
+  
+  LR_test = _2ll(G, gnc)
+  print("ground truth", LR_test)
+  
+  pvalue(G, gnc, LR_test, L = 3000, plothist = True)
+  return
   ############# end of this experiment #######################
 
   # community detection
@@ -272,4 +287,14 @@ def synthetic():
 if __name__ == "__main__":
   #football()
 
-  synthetic()
+  #synthetic(20, 10)
+  #synthetic(20, 20)
+  #synthetic(20, 30)
+  #synthetic(20, 40)
+
+  #synthetic(10, 20)
+  #synthetic(20, 20)
+  #synthetic(30, 20)
+  #synthetic(40, 20)
+
+  synthetic(20, 20)
