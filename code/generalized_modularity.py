@@ -176,7 +176,7 @@ def multiscale_community_detection(G, depth = 1, resolution = 0.5, threshold = 1
   '''
   verbose and print("\t" * depth, "D%d," % depth, "%d nodes" % int(G.number_of_nodes()))
 
-  comms = greedy_modularity_communities(G, resolution)
+  comms = greedy_modularity_communities(G, resolution=resolution)
 
   if len(comms) == 1:
     verbose and print("\t" * depth, "==")
@@ -206,7 +206,7 @@ def football():
   print(nx.info(G))
 
   # community detection
-  comms = list(multiscale_community_detection(G))
+  comms = list(multiscale_community_detection(G, resolution = 0.79))
 
   # check NMI
   map_comm = {v:i for i, c in enumerate(comms) for v in c}
@@ -285,7 +285,7 @@ def synthetic(n = 20, m = 20):
 
 #===============================================================================
 if __name__ == "__main__":
-  #football()
+  football()
 
   #synthetic(20, 10)
   #synthetic(20, 20)
@@ -297,4 +297,4 @@ if __name__ == "__main__":
   #synthetic(30, 20)
   #synthetic(40, 20)
 
-  synthetic(20, 20)
+  #synthetic(20, 20)

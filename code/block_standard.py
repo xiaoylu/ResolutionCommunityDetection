@@ -60,7 +60,7 @@ class Hierar:
     self.G = G
     self.N = G.number_of_nodes()
     self.E = G.number_of_edges()
-    if self.N == 1 or self.E == 0: print "Input network has 1 node or 0 edges. Exit."; exit(1) 
+    if self.N == 1 or self.E == 0: print("Input network has 1 node or 0 edges. Exit."); exit(1) 
     self.reset(gamma)
     self.least_num_of_comm = least_num_of_comm
     # constant used for the exact log-likelihood in unweighted graphs  
@@ -142,20 +142,20 @@ class Hierar:
   def stat_infer(self, gamma = 1.0, rule = "standard"): 
     self.reset(gamma) # reset parameters and create blocks
     comm = self.hierar()
-    print "First trial gamma=",gamma, "resulting #comm=", len(Counter(comm.values()))
+    print("First trial gamma=",gamma, "resulting #comm=", len(Counter(comm.values())))
     new_gamma = gamma
     for _ in range(15): # number of iterations
       win, wout = self.mle_paras(comm)
-      print "-2ll=", self._2ll(comm, win, wout)
-      print 
+      print("-2ll=", self._2ll(comm, win, wout))
+      print()
       if rule == "standard":
         new_gamma = (win - wout) / (np.log(win) - np.log(wout))
       elif rule == "bound":
         new_gamma = (win + wout) / 2.5 
-      print "update win=", win, "wout=", wout, "(s.t. next gamma=%f)" % new_gamma 
+      print("update win=", win, "wout=", wout, "(s.t. next gamma=%f)" % new_gamma)
       self.reset(new_gamma) # consistant parameters now 
       comm = self.hierar(stop_at_max_modularity=True, verbose=False)
-      print "resulting #comm=", len(Counter(comm.values()))
+      print("resulting #comm=", len(Counter(comm.values())))
     return comm 
 
   # iterate over different gamma values
@@ -180,7 +180,7 @@ class Hierar:
   def hierar(self, stop_at_max_modularity = False, verbose=False):
     ranking = self.init_ranking()
 
-    if verbose: print "start merging"
+    if verbose: print("start merging")
 
     cur_ll= self.ll()
     max_ll = 0. 
@@ -213,17 +213,17 @@ class Hierar:
 
               # command line display
               if verbose:
-                print "=" * 20
-                print "ll=", cur_ll, "+", delta_Q, "=", cur_ll + delta_Q
-                print "Save result max_ll=", max_ll, "number of communities=", len(self.active_bIDs)
-                print len(gsbm_comm), "nodes"
-                print len(set(gsbm_comm.values())), "comms"
-                print "=" * 20
+                print("=" * 20)
+                print("ll=", cur_ll, "+", delta_Q, "=", cur_ll + delta_Q)
+                print("Save result max_ll=", max_ll, "number of communities=", len(self.active_bIDs))
+                print(len(gsbm_comm), "nodes")
+                print(len(set(gsbm_comm.values())), "comms")
+                print("=" * 20)
 
             if stop_at_max_modularity: return gsbm_comm # empty if every single node is a community
 
           if ( len(self.active_bIDs) == self.least_num_of_comm ): 
-            print "Quit with least number of community = ", len(self.active_bIDs), "cur_ll=", cur_ll
+            print("Quit with least number of community = ", len(self.active_bIDs), "cur_ll=", cur_ll)
             for idx, b in enumerate(self.active_bIDs):
               for node in self.blocks[b].nodes:
                 gsbm_comm[node] = idx
@@ -246,9 +246,9 @@ class Hierar:
               del ranking[(min(b,j),max(b,j))]
 
     if max_ll > 0.:  
-      print "final max_ll=", max_ll 
+      print("final max_ll=", max_ll)
     else:
-      print "Failed with inappriopate parameters gamma=", self.GAMMA
+      print("Failed with inappriopate parameters gamma=", self.GAMMA)
     return gsbm_comm
 
   # test if the change of log-l upon merging two blocks is always correct
@@ -257,21 +257,21 @@ class Hierar:
     for _ in range(100):
       i, j = np.random.choice(list(self.active_bIDs)), np.random.choice(list(self.active_bIDs))
       if (i >= j): continue
-      print '<' * 20
-      print i, j, "benefit"
-      print self.blocks[i].nodes, self.blocks[i].edges, self.blocks[i].block_ll()
-      print self.blocks[j].nodes, self.blocks[j].edges, self.blocks[j].block_ll()
+      print('<' * 20)
+      print(i, j, "benefit")
+      print(self.blocks[i].nodes, self.blocks[i].edges, self.blocks[i].block_ll())
+      print(self.blocks[j].nodes, self.blocks[j].edges, self.blocks[j].block_ll())
       be = self.benefit(i,j)
       oldl = self.ll()
       self.merge(i, j)
       newl = self.ll()
       dl = newl - oldl
-      print '>' * 20
+      print('>' * 20)
       if (dl - be) > 1e-5:
-        print "Test failed. Change of Log-l", dl, "!= calculated by benefit() which is", be
-        print self.blocks[i].nodes, self.blocks[i].edges, self.blocks[i].block_ll()
+        print("Test failed. Change of Log-l", dl, "!= calculated by benefit() which is", be)
+        print(self.blocks[i].nodes, self.blocks[i].edges, self.blocks[i].block_ll())
         exit(1)
-    print "Test Succeed"
+    print("Test Succeed")
 
 def loadG(path):
   G = nx.Graph()
@@ -311,8 +311,8 @@ def test():
   G = loadG(path)
   if len(gnc_path) > 0: gnc = loadGNC(gnc_path)
   h = Hierar(G, least_num_of_comm = 2)
-  print "Graph Loaded"
-  print nx.info(G)
+  print("Graph Loaded")
+  print(nx.info(G))
 
   label_set = [] 
   for rule in ["standard", "bound"]:
@@ -323,13 +323,13 @@ def test():
     if len(gnc) > 0:
       a = [comm[k] for k in comm.keys()]
       b = [gnc[k] for k in comm.keys()]
-      print "Ground-truth NMI=", metrics.adjusted_mutual_info_score(a, b)
+      print("Ground-truth NMI=", metrics.adjusted_mutual_info_score(a, b))
     exit(1)
 
   for x,y in combinations(label_set, 2): 
     a = [x[k] for k in x.keys()]
     b = [y[k] for k in x.keys()]
-    print "Mutual NMI=", metrics.adjusted_mutual_info_score(a, b)
+    print("Mutual NMI=", metrics.adjusted_mutual_info_score(a, b))
 
 if __name__=="__main__":
   test()

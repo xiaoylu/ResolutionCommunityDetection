@@ -14,6 +14,8 @@ import numpy as np
 import itertools
 import scipy
 import collections
+import pickle
+
 
 def heatmap(G, comm): 
     '''
@@ -138,3 +140,10 @@ def hist(sizes_distri):
   plt.tight_layout()
   plt.savefig("hist_sizes.png")
   print("Save figure named \"hist_sizes.png\"")
+
+
+if __name__ == "__main__":
+  
+    comms0_sizes, comms1_sizes = pickle.load(open( "save.p", "rb" ) )
+    hist({"Modularity": comms0_sizes, "Multiscale": comms1_sizes})
+

@@ -20,7 +20,7 @@ def c2r1(nC=6, nS=30, kS=6):
   G.add_edge(0,nS)
   G.add_edge(1,nS+nC)
   G.add_edge(nS+1,nS+nC+1)
-  print nx.info(G)
+  print(nx.info(G))
   gnc = {_:0 for _ in range(nS)}
   gnc.update({_+nS:1 for _ in range(nC)})
   gnc.update({_+nS+nC:2 for _ in range(nC)})
@@ -36,7 +36,7 @@ def draw(G, colormap):
   nx.draw_networkx_edges(G,pos,width=1,edge_color='black')
   plt.axis('off')
   plt.savefig("network.png", bbox_inches="tight")
-  print "Save figure to", "network.png" 
+  print("Save figure to", "network.png")
 
 # Generate a degree-corrected SBM given the parameters
 # @n_comm : number of communities
@@ -53,10 +53,10 @@ def dcSBM(block, w, k):
   N = len(block) 
   n_comm = len(set(block.values()))
   m = sum(k) / 2.
-  print N, n_comm, m
+  print(N, n_comm, m)
 
   # prior values for generation
-  print "Prior", w
+  print("Prior", w)
 
   G = nx.Graph()
   for i in range(N):

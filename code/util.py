@@ -49,7 +49,7 @@ def mle(G,gnc,mode="modularity"):
   kp_in, kp = cal_kappa(G, gnc)
   m = float(G.number_of_edges())
   sum_kp_in = sum(kp_in.values())
-  if (sum_kp_in == 0): print "No communities given (but a set of individual nodes); Quit.";exit(1)
+  if (sum_kp_in == 0): print("No communities given (but a set of individual nodes); Quit.");exit(1)
   sum_kp_sqr = sum([np.power(_, 2) for _ in kp.values()])
   if mode == "modularity":
     w_in = sum_kp_in / (sum_kp_sqr / (2.*m))
@@ -84,7 +84,7 @@ def resolution_limit():
     G, gnc = c2r1(nC=13, nS=nS, kS=100)
     gnc_mergeC = {k: int(v>0)  for k, v in gnc.items()}
     gnc_splitS = {k: v if v > 0 else 3+np.random.randint(2) for k, v in gnc.items()}
-    print modularity(G,gnc_splitS,gamma=gamma), modularity(G,gnc,gamma=gamma), modularity(G,gnc_mergeC,gamma=gamma)
+    print(modularity(G,gnc_splitS,gamma=gamma), modularity(G,gnc,gamma=gamma), modularity(G,gnc_mergeC,gamma=gamma))
 
 # the example of 2 cliques and 1 random graph in the resolution limit paper
 def infer():
@@ -92,7 +92,7 @@ def infer():
   G, gnc = c2r1(nC=13, nS=nS, kS=100)
   gnc_mergeC = {k: int(v>0)  for k, v in gnc.items()}
   gnc_splitS = {k: v if v > 0 else 3+np.random.randint(2) for k, v in gnc.items()}
-  print ll(G,gnc_splitS,mode="modularity"), ll(G,gnc_mergeC,mode="modularity"), ll(G,gnc,mode="modularity")
+  print(ll(G,gnc_splitS,mode="modularity"), ll(G,gnc_mergeC,mode="modularity"), ll(G,gnc,mode="modularity"))
 
 def NMI_dict(comm, gnc): 
   a = [comm[k] for k in comm.keys()]
@@ -101,10 +101,10 @@ def NMI_dict(comm, gnc):
 
 def test_resolution_limit():
   mo, l = ll(G,gnc,mode="modularity")
-  print "Generalized Modularity=", mo
+  print("Generalized Modularity=", mo)
   
   mo, l = ll(G,gnc,mode="density")
-  print "Our model=", mo
+  print("Our model=", mo)
   
   G, gnc, Omega = dcSBM()
   
@@ -113,12 +113,12 @@ def test_resolution_limit():
   plt.savefig("adjacency_matrix.png")
   h = Hierar(G, 2)
   comm = h.mdl()
-  print comm
+  print(comm)
   
   for i in comm.keys():
     if comm[i] == 0:
       comm[i] = 1 
-  print mle(G, comm, mode="density")
+  print(mle(G, comm, mode="density"))
 
 #infer()
 #resolution_limit()
