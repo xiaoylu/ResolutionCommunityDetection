@@ -70,7 +70,7 @@ def mle_paras(G, comm):
     if comm[u] == comm[v]:
       k_r_in[comm[u]] += 2 
 
-  win =    sum(k_r_in.values()) \
+  win = sum(k_r_in.values()) \
         / (sum([np.power(sumdeg, 2) for sumdeg in k_r.values()]) / 2./ E)
 
   wout = (2.0 * E - sum(k_r_in.values())) \
@@ -115,7 +115,10 @@ def _2ll(G, comms):
 
 def pvalue(G, comms, LLRtest, L = 3000, plothist = False):
   '''
-  Compute the distribution of the test statistic in a range 
+  Compute the distribution of the test statistic in a range.
+  Warning: Enumerating all Null networks is very slow.  
+           Do not call this function in practical community detection. 
+           Use threshold on the LR test statistic directly.
 
   Args:
       G: input networkx graph instance
@@ -126,12 +129,6 @@ def pvalue(G, comms, LLRtest, L = 3000, plothist = False):
   Returns:
       (float): pvalue of LLRtest
   '''
-
-  #if LLRtest > 50: # skip the obvious cases
-  #  return 0
-  ## WARN: fast check (skip p-value part)
-  #else:
-  #  return 1
 
   node_seq, deg_seq = zip(*list(G.degree()))
   index = {n:i for i, n in enumerate(node_seq)}
@@ -160,7 +157,7 @@ def pvalue(G, comms, LLRtest, L = 3000, plothist = False):
 
   return pval 
 
-def multiscale_community_detection(G, depth = 1, resolution = 0.5, threshold = 1.2, verbose = False):
+def multiscale_community_detection(G, depth = 1, resolution = 0.5, threshold = 1.2, min_com_size = 5, verbose = False, force_pvalue_sampling = False):
   '''
   Multi-scale community detection. Stop when hypothesis testing fails.
   Otherwise keep splitting a community into sub-communities.
@@ -169,15 +166,20 @@ def multiscale_community_detection(G, depth = 1, resolution = 0.5, threshold = 1
       G: input networkx graph instance
       depth: the current depth of the recursion
       resolution: the resolution parameter, desired value is smaller than 1
-      threshold: terminate the recursion when the log-likelihood ratio (LLR) becomes smaller than threshold
+      threshold: terminate the recursion when the log-likelihood ratio (LLR) becomes smaller than threshold * E
 
   Returns:
       list: the final partition of the network
   '''
   verbose and print("\t" * depth, "D%d," % depth, "%d nodes" % int(G.number_of_nodes()))
+   
+  # community too small
+  if G.number_of_nodes() <= min_com_size:
+    return [list(G.nodes())]
 
-  comms = greedy_modularity_communities(G, resolution=resolution)
+  comms = greedy_modularity_communities(G, resolution = resolution)
 
+  # found only one with current resolution
   if len(comms) == 1:
     verbose and print("\t" * depth, "==")
     return [list(G.nodes())]
@@ -186,12 +188,23 @@ def multiscale_community_detection(G, depth = 1, resolution = 0.5, threshold = 1
 
   verbose and print("\t" * depth, "LR=", LR_test)
 
-  if LR_test < threshold: # stop
-    verbose and print("\t" * depth, "**")
-    return [list(G.nodes())]
+  # if we enforce the test based on pvalue
+  if force_pvalue_sampling:
+    pval = pvalue(G, comms, LR_test, L = 3000, plothist = False)
+    verbose and print("\t" * depth, "pvalue=", pval)
+    if pval > 0.005:
+      return [list(G.nodes())]
 
+  # otherwise, we just compare LR_test to a threshold
+  else:
+    # Accept null hypothesis H0 that it's indeed one community
+    if LR_test < threshold: # stop
+      verbose and print("\t" * depth, "**")
+      return [list(G.nodes())]
+
+  # otherwise, we accept H1, and partition at the next level
   return itertools.chain.from_iterable( \
-      multiscale_community_detection(G.subgraph(c), depth + 1, resolution, threshold) \
+      multiscale_community_detection(G.subgraph(c), depth + 1, resolution, threshold, min_com_size, verbose, force_pvalue_sampling) \
       for c in comms)
 
 def football():
@@ -206,7 +219,10 @@ def football():
   print(nx.info(G))
 
   # community detection
-  comms = list(multiscale_community_detection(G, resolution = 0.79))
+  # Either Choice 1
+  comms = list(multiscale_community_detection(G, resolution = 0.9, verbose = True, force_pvalue_sampling = True))
+  # Or Choice 2
+  #comms = greedy_modularity_communities(G)
 
   # check NMI
   map_comm = {v:i for i, c in enumerate(comms) for v in c}
@@ -223,10 +239,6 @@ def football():
   # draw heatmap
   heatmap(G, comms)
 
-
-#def lesmis():
-#  name = 'Les Miserable'
-#  path = "../data/lesmis/lesmis.txt"
 
 def synthetic(n = 20, m = 20):
   # n communities of size m

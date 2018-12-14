@@ -129,21 +129,39 @@ def hist(null_distri, LRtest, figname, pvalue):
   plt.savefig(name)
   print("Savefig", name)
 
-def hist(sizes_distri):
+def hist(sizes_distri, figname):
   plt.clf()
-  marker = ['ko-.', 'b*-', 'rx-']
-  for i, (label, a) in enumerate(sizes_distri.items()):
-    hist, bin_edges = np.histogram(a)
+  marker = ['b*-', 'rx-', 'ko-.']
+  #mybins = np.linspace(0, 1000, num = 20) 
+  mybins = [0] + list(np.logspace(np.log10(30), np.log10(1000), 8))
+  print(mybins)
+
+  for i, label in enumerate(sorted(sizes_distri.keys())):
+    a = sizes_distri[label]
+    hist, bin_edges = np.histogram(a, bins = mybins)
+    print(bin_edges)
     plt.plot(bin_edges[:-1], hist, marker[i], label=label, linewidth = 2, markersize = 10)
-  plt.tick_params(axis='both', which='major', labelsize=30)
+
+  #ax = plt.gca()
+  #ax.set_xscale('log')
+
+  plt.tick_params(axis='both', which='major', labelsize=25)
   plt.legend(loc = "upper right", fontsize = 20)
   plt.tight_layout()
-  plt.savefig("hist_sizes.png")
+  plt.savefig("hist_sizes_%d.png" % figname)
   print("Save figure named \"hist_sizes.png\"")
 
 
 if __name__ == "__main__":
-  
-    comms0_sizes, comms1_sizes = pickle.load(open( "save.p", "rb" ) )
-    hist({"Modularity": comms0_sizes, "Multiscale": comms1_sizes})
+  #sizes_distri = {"Ground Truth": gnc_sizes, "Modularity": comms0_sizes, "Multiscale": comms1_sizes}
+  arg = pickle.load(open( "save5000.p", "rb" ) )
+  hist(arg, 5000)
 
+  arg = pickle.load(open( "save7000.p", "rb" ) )
+  hist(arg, 7000)
+
+  arg = pickle.load(open( "save9000.p", "rb" ) )
+  hist(arg, 9000)
+
+  arg = pickle.load(open( "save11000.p", "rb" ) )
+  hist(arg, 11000)
