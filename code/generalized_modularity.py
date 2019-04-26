@@ -1,4 +1,4 @@
- coding: utf-8 -*-
+# coding: utf-8 -*-
 """
 
 This module implements the multi-scale community detection with generalized 
@@ -15,6 +15,8 @@ Research article is available at:
 """
 
 import numpy as np 
+import scipy
+from scipy.stats import entropy
 from collections import defaultdict, Counter
 import itertools
 import time
@@ -48,6 +50,30 @@ def loadGNC(path):
     for i, line in enumerate(fconf):
       gnc[i] = int(line.strip())
   return gnc
+
+def kappas(G, comm): 
+  ''' 
+  Compute the sum of degree of node in each community
+  
+  Args:
+      G: input networkx graph instance
+      comm: a dict where comm[i] is the community label of node i   
+  
+  Returns:
+      ks: a dict where ks[r] is the degree sums in comm r
+  ''' 
+
+  N, E = G.number_of_nodes(), G.number_of_edges()
+
+  k_r, k_r_in = defaultdict(int), defaultdict(int)
+  for i in comm: 
+    k_r[comm[i]] += G.degree(i)
+  for u, v in G.edges():
+    if comm[u] == comm[v]:
+      k_r_in[comm[u]] += 2 
+
+  return k_r, k_r_in 
+
 
 def mle_paras(G, comm): 
   ''' 
@@ -112,6 +138,34 @@ def _2ll(G, comms):
   C = E * (np.log(wout) - wout)
 
   return 2. * (B * mod + C + E) / E # normalized by the number of edges ???
+
+def bayes_model_selection(G, comms):
+  '''
+  Bayesian Model Selection by posterior odds 
+  H0 is the configuration model.
+  H1 is the degree-corrected planted partition model.
+
+  Args:
+      G: input networkx graph instance
+      comms: partition of network, list of lists 
+
+  Returns:
+      the log-likelihood ratio test statistic 
+  '''
+
+  E = G.number_of_edges()
+  N = G.number_of_nodes()
+  map_comm = {v:i for i, c in enumerate(comms) for v in c}
+  k_r, k_r_in = kappas(G, map_comm)
+  a = sum(k_r_in.values())
+  b = sum([v * v for v in k_r.values()]) / (2. * E)  
+  c, d = 2. * E - a, 2. * E - b
+  print(a, b, c, d)
+  
+  ent = scipy.stats.entropy([float(len(c))/N for c in comms])
+ 
+  return (a * (np.log(a) - np.log(b)) + c * (np.log(c) - np.log(d))) - N * ent
+
 
 def pvalue(G, comms, LLRtest, L = 3000, plothist = False):
   '''
@@ -184,23 +238,31 @@ def multiscale_community_detection(G, depth = 1, resolution = 0.5, threshold = 1
     verbose and print("\t" * depth, "==")
     return [list(G.nodes())]
 
-  LR_test = _2ll(G, comms)
+  # WARNING: LR test is inappriopate here
+  #LR_test = _2ll(G, comms)
 
-  verbose and print("\t" * depth, "LR=", LR_test)
+  #verbose and print("\t" * depth, "LR=", LR_test)
 
-  # if we enforce the test based on pvalue
-  if force_pvalue_sampling:
-    pval = pvalue(G, comms, LR_test, L = 3000, plothist = False)
-    verbose and print("\t" * depth, "pvalue=", pval)
-    if pval > 0.005:
-      return [list(G.nodes())]
+  ## if we enforce the test based on pvalue
+  #if force_pvalue_sampling:
+  #  pval = pvalue(G, comms, LR_test, L = 3000, plothist = False)
+  #  verbose and print("\t" * depth, "pvalue=", pval)
+  #  if pval > 0.005:
+  #    return [list(G.nodes())]
 
-  # otherwise, we just compare LR_test to a threshold
-  else:
-    # Accept null hypothesis H0 that it's indeed one community
-    if LR_test < threshold: # stop
-      verbose and print("\t" * depth, "**")
-      return [list(G.nodes())]
+  ## otherwise, we just compare LR_test to a threshold
+  #else:
+  #  # Accept null hypothesis H0 that it's indeed one community
+  #  if LR_test < threshold: # stop
+  #    verbose and print("\t" * depth, "**")
+  #    return [list(G.nodes())]
+
+  posterior_odds = bayes_model_selection(G, comms) 
+  verbose and print("\t" * depth, \
+                    "Posterior Odds (log-scale, MDL) =", posterior_odds)
+
+  # select H0 
+  if posterior_odds < 0.: return [list(G.nodes())]
 
   # otherwise, we accept H1, and partition at the next level
   return itertools.chain.from_iterable( \
@@ -220,7 +282,7 @@ def football():
 
   # community detection
   # Either Choice 1
-  comms = list(multiscale_community_detection(G, resolution = 0.9, verbose = True, force_pvalue_sampling = True))
+  comms = list(multiscale_community_detection(G, resolution = 0.5, verbose = True, force_pvalue_sampling = True))
   # Or Choice 2
   #comms = greedy_modularity_communities(G)
 
