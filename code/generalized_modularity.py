@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+ coding: utf-8 -*-
 """
 
 This module implements the multi-scale community detection with generalized 
